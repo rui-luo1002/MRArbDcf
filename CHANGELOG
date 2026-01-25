@@ -1,3 +1,6 @@
+1.0.6
+Fix the shape error in the output DCF.
+
 1.0.5
 Make dtype stick to complex64/float32
 
