@@ -10,40 +10,37 @@ gamma = 42.5756e6
 
 nPix = 256
 fov = 0.5
-sLim = 100 * gamma * fov / nPix
+sLim = 50 * gamma * fov / nPix
 gLim = 120e-3 * gamma * fov / nPix
 dtGrad = 10e-6
-dtADC = 5e-6
+dtADC = 2.5e-6
 
+mag.setMagOverSamp(4)
 if sTraj=="Yarnball":
-    nAx = 3; mag.setGoldAng(nAx==2); ovTraj = sqrt(nAx); gLim = amin([gLim, 1/(dtADC*nPix*ovTraj)])
-    lstArrK0, lstArrGrad = mag.getG_Yarnball(nAx==3, fov*sqrt(nAx), nPix*sqrt(nAx), sLim, gLim, dtGrad)
+    nAx = 3; mag.setGoldAng(nAx==2); gLim = amin([gLim, 1/(dtADC*nPix)])
+    lstArrK0, lstArrGrad = mag.getG_Yarnball(fov, nPix, sLim, gLim, dtGrad, kRhoPhi=0.5/(2*pi))
 elif sTraj=="VdSpiral":
-    nAx = 2; mag.setGoldAng(nAx==2); ovTraj = sqrt(nAx); gLim = amin([gLim, 1/(dtADC*nPix*ovTraj)])
-    lstArrK0, lstArrGrad = mag.getG_VarDenSpiral(nAx==3, fov*sqrt(nAx), nPix*sqrt(nAx), sLim, gLim, dtGrad)
+    nAx = 2; mag.setGoldAng(nAx==2); gLim = amin([gLim, 1/(dtADC*nPix)])
+    lstArrK0, lstArrGrad = mag.getG_VDSpiral(fov, nPix, sLim, gLim, dtGrad, kRhoPhi0=0.5/(256*pi), kRhoPhi1=0.5/(2*pi))
 elif sTraj=="Rosette":
-    nAx = 2; mag.setGoldAng(nAx==2); ovTraj = sqrt(nAx); gLim = amin([gLim, 1/(dtADC*nPix*ovTraj)])
-    lstArrK0, lstArrGrad = mag.getG_Rosette(nAx==3, fov*sqrt(nAx), nPix*sqrt(nAx), sLim, gLim, dtGrad)
+    nAx = 2; mag.setGoldAng(nAx==2); gLim = amin([gLim, 1/(dtADC*nPix)])
+    lstArrK0, lstArrGrad = mag.getG_Rosette(fov, nPix, sLim, gLim, dtGrad)
 elif sTraj=="Cones":
-    nAx = 3; mag.setGoldAng(nAx==2); ovTraj = sqrt(nAx); gLim = amin([gLim, 1/(dtADC*nPix*ovTraj)])
-    lstArrK0, lstArrGrad = mag.getG_Cones(nAx==3, fov*sqrt(nAx), nPix*sqrt(nAx), sLim, gLim, dtGrad)
+    nAx = 3; mag.setGoldAng(nAx==2); gLim = amin([gLim, 1/(dtADC*nPix)])
+    lstArrK0, lstArrGrad = mag.getG_Cones(fov, nPix, sLim, gLim, dtGrad)
 
 # Convert gradients to k-space coordinates
 lstArrK:list[NDArray] = []
 for arrK0, arrGrad in zip(lstArrK0, lstArrGrad):
-    arrK, _ = mag.cvtGrad2Traj(arrGrad, dtGrad, dtADC)
+    arrK = mag.cvtGrad2Traj(arrGrad, dtGrad, dtADC)[0]
     arrK += arrK0
     # Keep all 3 dimensions for the 3D case
-    lstArrK.append(arrK[:, :nAx])
+    lstArrK.append(arrK[:,:nAx])
 
-mad.setDbgInfo(1)
 t = time()
-lstArrDcf = mad.sovDcf(nPix, lstArrK, sWind="poly")
+lstArrDcf = mad.solve(nPix, lstArrK)
 t = time()-t
 print(f"time: {t:.3f}")
-
-# Normalize for 3D (nAx=3)
-lstArrDcf = [mad.normDcf(arrDcf, nAx=nAx) for arrDcf in lstArrDcf]
 
 # 4. Visualization
 fig = figure(figsize=(12, 5))

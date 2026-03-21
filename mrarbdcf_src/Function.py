@@ -1,9 +1,9 @@
-py_sum = sum
-
 # import library
 import numpy
 from numpy.typing import NDArray
+from matplotlib.pyplot import * # test
 import finufft
+from .Utility import normDcf
 from time import time
 from itertools import product
 from psutil import cpu_count
@@ -11,25 +11,13 @@ from psutil import cpu_count
 # gpu library
 try:
     import cufinufft, cupy
-    useCuda = bool(1)
 except ImportError:
-    useCuda = bool(0)
-xp = cupy if useCuda else numpy
+    pass
+xp = numpy
 
 pi = numpy.pi
 
 # interface function
-nStep = 2 # 1
-def setNumStep(x:int):
-    """
-    While this method can converge in 1 step in most cases, it's possible to set the number of steps via this interface.
-
-    Args:
-        x: Number of steps to be set.
-    """
-    global nStep
-    nStep = int(x)
-    
 fDbgInfo = False
 def setDbgInfo(x:bool):
     """
@@ -52,6 +40,32 @@ def setInputCheck(x:bool):
     global enInputCheck
     enInputCheck = bool(x)
     
+enWarmStart = 3
+def setWarmStart(x:int):
+    """
+    Set whether to use warm start. Recommend and default to True.
+    Note that 
+
+    Args:
+        x: 0 for disabled; 1 for radial DCF; 2 for linear DCF; 3 for both
+    """
+    global enWarmStart
+    enWarmStart = int(x)
+
+lstWType = ["poly"]
+lstWPara = [2.4]
+def setWind(wtype:list[str], wpara:list[float]):
+    """
+    Set type and shape parameter of the PSF window
+
+    Args:
+        wtype (list[str]): window type, can be "poly" or "cos" or "es"
+        spara (list[float]): desired shape parameter
+    """
+    global lstWType, lstWPara
+    lstWType = wtype
+    lstWPara = wpara
+    
 def setUseCuda(x:bool):
     """
     Set whether to use cuda for acceleration.
@@ -60,131 +74,139 @@ def setUseCuda(x:bool):
     Args:
         x: True for to use. False for not to.
     """
-    global useCuda, xp
-    useCuda = bool(x)
-    xp = cupy if useCuda else numpy
+    global xp
+    xp = cupy if x else numpy
     
-def _getArrKArrI0(lstArrK:list[NDArray]) -> tuple[NDArray,NDArray]:
-    _xp = numpy if isinstance(lstArrK[0], numpy.ndarray) else cupy
-    arrK = _xp.concatenate(lstArrK, axis=0).astype(_xp.float32)
-    arrNRO = _xp.array([_.shape[0] for _ in lstArrK])
-    arrI0 = _xp.zeros((len(arrNRO),), dtype=int)
-    arrI0[1:] = _xp.cumsum(arrNRO)[:-1]
-    return arrK, arrI0
-    
-def sovDcf(nPix:int, lstArrK:list[NDArray], sWind:str="poly", pShape:float=None) -> list[NDArray]:
+def setMode(x:int):
     """
-    Solve density compensation function.
+    Set solver's working mode.
     
     Args:
-        nPix: Designed number of pixels of the trajectory.
-        lstArrK: List of trajectorys, element shape [nK,nAx].
-        sWind: Window function type, can be "poly", "cos", "es".
-        pShape: Window function shape parameter.
-        
-    Returns:
-        list of density compensation function, w.r.t. lstArrK.
+        x: 0 for general mode, 1 for fast mode, 2 for precise mode
     """
-    arrK, arrI0 = _getArrKArrI0(lstArrK)
-    arrDcf = calDcf(nPix, arrK, arrI0, sWind, pShape)
-    lstArrDcf = [arrDcf[i0:i1] for i0,i1 in zip(arrI0[:-1],arrI0[1:])]
-    lstArrDcf.append(arrDcf[arrI0[-1]:])
-    return lstArrDcf
-   
-def calDcf(nPix:int, arrK:NDArray, arrI0:NDArray|None=None, sWind:str="poly", pShape:float=None) -> NDArray:
+    if x==0:
+        setInputCheck(1)
+        setWarmStart(0)
+        setWind(["corr", "poly"], [0, 2.4])
+        """
+        @note: if trajectory-based warm start is 
+        impossible, we use a Fourier PD window - autocorrelation window to generate an
+        initial guess, because this kind of window
+        will not cause DCF cancelation.
+        """
+    elif x==1:
+        setInputCheck(0)
+        setWarmStart(3)
+        setWind(["poly"], [2.4])
+    elif x==2:
+        setInputCheck(0)
+        setWarmStart(3)
+        setWind(["poly", "poly"], [2, 4])
+    else:
+        raise RuntimeError("x")
+    
+# main solver
+def solve(nPix:int, lstArrK:list[NDArray]) -> list[NDArray]:
     """
-    Deprecated. Calculate density compensation function.
+    Solve for the density compensation function.
         
     Args:
         nPix: Designed number of pixels of the trajectory.
-        arrK: Concatenated trajectories, shape [nK,nAx].
+        lstArrK: list of trajectories, element shape [nK,nAx].
         arrI0: Start index of each interleaves, shape [nIntLea,].
-        sWind: Window function type, can be "poly", "cos", "es".
-        pShape: Window function shape parameter.
         
     Returns:
-        Density compensation function, shape [nK,].
+        list of density compensation function, element shape [nK,].
     """
     t0 = time()
-    isInputNumpy = isinstance(arrK, numpy.ndarray)
-    arrK = xp.asanyarray(arrK)
-    arrI0 = xp.asanyarray(arrI0)
+    
+    arrCatK = xp.concatenate(lstArrK, axis=0).astype(xp.float32)
+    nTraj = len(lstArrK)
+    arrNRO = xp.array([arrK.shape[0] for arrK in lstArrK])
+    arrI0 = xp.zeros((len(arrNRO),), dtype=int)
+    arrI0[1:] = xp.cumsum(arrNRO)[:-1]
     
     if enInputCheck: # check
         # unfixable
-        if not isInputNumpy and not useCuda:
-            raise RuntimeError(f"cupy input must be processed via cuda")
-        if arrK.ndim!=2 or arrK.shape[1] not in (2,3): 
-            raise RuntimeError(f"`arrK.shape` should be `[nK,nDim]`, got `{arrK.shape}`")
-        arrRho:NDArray = xp.linalg.norm(arrK, axis=-1)
-        if abs(arrRho.max()-0.5)>0.1: raise UserWarning("k-range: [-0.5,0.5]")
+        if arrCatK.ndim!=2 or arrCatK.shape[1] not in (2,3):
+            raise RuntimeError(f"`lstArrK[i].shape` should be `[nK,nDim]`, got `{arrCatK.shape}`")
+        arrRho:NDArray = xp.linalg.norm(arrCatK, axis=-1)
+        if arrRho.max()>0.51: raise UserWarning("k-range: [-0.5,0.5]")
         # fixable
-        if arrK.shape[1]==3 and (arrK[:,2]==0).all(): arrK = arrK[:,:2]
-        if useCuda: arrK = arrK.astype("float32")
+        if arrCatK.shape[1]==3 and (arrCatK[:,2]==0).all(): arrCatK = arrCatK[:,:2]
+    if fDbgInfo: print(f"# input check: {time() - t0:.3f}s"); t0 = time()
     
     # basic parameter
     nPix = int(nPix)
-    nK, nAx = arrK.shape
+    nK, nAx = arrCatK.shape
     complex = xp.complex64
     float = xp.float32
     scomplex = "complex64"
     
-    if fDbgInfo: print(f"# input check: {time() - t0:.3f}s"); t0 = time()
-    
     # data initialize
-    arrDcf = xp.ones((nK,), dtype=complex)
+    arrCatDcf = xp.ones(nK, dtype=complex)
+    arrCatDcf = normDcf(arrCatDcf, nAx)
     
-    # radial DCF
-    arrRho = xp.sum(arrK**2, axis=-1, dtype=complex)
-    xp.sqrt(arrRho, out=arrRho)
-    arrDcf *= (arrRho+1/nPix)**(nAx-1)
-    
-    # 1D DCF
-    if arrI0 is not None:
-        arrDcf1D = xp.empty((nK,), dtype=complex)
-        arrDcf1D[:-1] = xp.sqrt(xp.sum(xp.diff(arrK, axis=0)**2, axis=-1)) # this step takes 1.2s?
-        arrDcf1D[-1] = arrDcf1D[-2]
-        arrDcf1D[arrI0[1:]-1] = arrDcf1D[arrI0[1:]-2] # fix the error at seam of two trajectories
-        arrDcf *= arrDcf1D
-    
-    # return arrDcf # see how initial DCF be like
+    if enWarmStart & 0x01:
+        # radial DCF
+        arrRho = xp.sum(arrCatK**2, axis=-1, dtype=complex)
+        xp.sqrt(arrRho, out=arrRho)
+        arrCatDcf *= (arrRho+1/nPix)**(nAx-1)
+    if enWarmStart & 0x02:
+        # 1D DCF
+        arrDcf1D = xp.empty(nK, dtype=complex)
+        arrDcf1D[:-1] = xp.sqrt(xp.sum(xp.diff(arrCatK, axis=0)**2, axis=-1))
+        arrDcf1D[arrI0-1] = arrDcf1D[arrI0-2]
+        arrCatDcf *= arrDcf1D
     
     if fDbgInfo: print(f"# data initialize: {time() - t0:.3f}s"); t0 = time()
 
-    # grid of rho
-    coords = xp.ogrid[tuple(slice(0, 1, nPix*1j) for _ in range(nAx))]
-    arrGridRho = xp.sqrt(py_sum(c.astype(float)**2 for c in coords))
-    if fDbgInfo: print(f"# grid of rho: {time() - t0:.3f}s"); t0 = time()
+    nStep = len(lstWType)
+    for iStep in range(nStep):
+        wtype = lstWType[iStep]
+        wpara = lstWPara[iStep]
+        # grid of rho
+        coords = xp.ogrid[tuple(slice(0, 1, nPix*1j) for _ in range(nAx))]
+        arrGridRho = xp.sqrt(sum(c.astype(float)**2 for c in coords))
+        if fDbgInfo: print(f"# grid of rho: {time() - t0:.3f}s"); t0 = time()
 
-    # Nd window
-    if sWind=="poly": arrWindNd = 1 - arrGridRho.clip(0,1)**(2.0 if pShape is None else pShape) # 2.4
-    elif sWind=="cos": arrWindNd = xp.cos(arrGridRho*pi/2).clip(0,1)**(1.0 if pShape is None else pShape) # 0.7
-    elif sWind=="es": beta=2.0 if pShape is None else pShape; arrWindNd = xp.exp(beta*xp.sqrt(1-arrGridRho.clip(0,1)**2))/xp.exp(beta)
-    else: raise NotImplementedError("")
+        # Nd window
+        r = arrGridRho.clip(0,1)
+        if wtype=="poly": arrWindNd = 1 - r**wpara # 2.4
+        elif wtype=="cos": arrWindNd = 0.5 + 0.5*xp.cos(r*pi).clip(0,1)**wpara # 0.7
+        elif wtype=="es": beta=wpara; arrWindNd = xp.exp(beta*xp.sqrt(1-r**2))/xp.exp(beta)
+        elif wtype=="gaus": arrWindNd = xp.exp(-r**2/(2*wpara**2))
+        elif wtype=="wend": arrWindNd = (1-r)**4 * (4*r + 1)
+        elif wtype=="wend4": arrWindNd = ((1-r)**6) * (35*r**2 + 18*r + 3) / 3.0
+        elif wtype=="corr":
+            if nAx==1: arrWindNd = 1 - r
+            elif nAx==2: arrWindNd = 2/pi*(xp.arccos(r) - r*xp.sqrt(1-r**2))
+            elif nAx==3: arrWindNd = 1 - 3/2*r + 1/2*r**3
+        else: raise NotImplementedError("")
+        arrWindNd[arrGridRho>1] = 0
+        arrWindNd /= abs(arrWindNd).max()
+        del arrGridRho
+        
+        for iAx in range(nAx):
+            tupSli = tuple(0 if iAx==_iAx else slice(None) for _iAx in range(nAx))
+            xp.sqrt(arrWindNd[tupSli], out=arrWindNd[tupSli])
+        if fDbgInfo: print(f"# Nd window: {time() - t0:.3f}s"); t0 = time()
+        
+        # deconvolve
+        nufftpara = {"upsampfac":1.25} if xp!=numpy else {"debug":0, "spread_debug":0, "showwarn":0, "upsampfac":1.25, "nthreads":cpu_count(logical=True), "spread_sort":1, "fftw":64}
+        fn = cufinufft if xp!=numpy else finufft
+        
+        n_modes = tuple(2*nPix-1 for _ in range(nAx))
+        arr2PiKT = xp.array(arrCatK.T, order='C', dtype=float)
+        arr2PiKT *= 2*pi
+        eps = 1e-3
+        
+        pNuift = fn.Plan(1, n_modes, eps=eps, dtype=scomplex, **nufftpara)
+        pNufft = fn.Plan(2, n_modes, eps=eps, dtype=scomplex, **nufftpara)
+        pNuift.setpts(*arr2PiKT)
+        pNufft.setpts(*arr2PiKT)
     
-    arrWindNd[arrGridRho>1]=0
-    del arrGridRho
-    
-    for iAx in range(nAx):
-        tupSli = tuple(0 if iAx==_iAx else slice(None) for _iAx in range(nAx))
-        xp.sqrt(arrWindNd[tupSli], out=arrWindNd[tupSli])
-    if fDbgInfo: print(f"# Nd window: {time() - t0:.3f}s"); t0 = time()
-    
-    # deconvolve
-    nufftpara = {"upsampfac":1.25} if useCuda else {"debug":0, "spread_debug":0, "showwarn":0, "upsampfac":1.25, "nthreads":cpu_count(logical=True), "spread_sort":1, "fftw":64}
-    fn = cufinufft if useCuda else finufft
-    
-    n_modes = tuple(2*nPix-1 for _ in range(nAx))
-    arr2PiKT = xp.array(arrK.T, order='C', dtype=float)
-    arr2PiKT *= 2*pi
-    eps = 1e-3
-    
-    pNuift = fn.Plan(1, n_modes, eps=eps, dtype=scomplex, **nufftpara)
-    pNufft = fn.Plan(2, n_modes, eps=eps, dtype=scomplex, **nufftpara)
-    pNuift.setpts(*arr2PiKT)
-    pNufft.setpts(*arr2PiKT)
-    for i in range(nStep):
-        arrPsf = pNuift.execute(arrDcf)
+        arrPsf = pNuift.execute(arrCatDcf)
         if fDbgInfo: print(f"# nuift: {time() - t0:.3f}s"); t0 = time()
         
         # suppress alias outside of PSF
@@ -195,11 +217,15 @@ def calDcf(nPix:int, arrK:NDArray, arrI0:NDArray|None=None, sWind:str="poly", pS
             arrPsf[tupSli] *= arrWindNd
         
         arrDcfApo = pNufft.execute(arrPsf)
-        arrDcf /= arrDcfApo
+        arrCatDcf /= arrDcfApo
+        arrCatDcf = normDcf(arrCatDcf, nAx)
         if fDbgInfo: print(f"# nufft: {time() - t0:.3f}s"); t0 = time()
     
-    if isInputNumpy and xp!=numpy:
-        return arrDcf.get()
-    else:
-        return arrDcf
+    if xp!=numpy:
+        arrCatDcf = arrCatDcf.get()
+        arrI0 = arrI0.get()
+    lstArrDcf = [arrCatDcf[arrI0[iTraj]:arrI0[iTraj+1]] for iTraj in range(nTraj-1)]
+    lstArrDcf.append(arrCatDcf[arrI0[-1]:])
+    
+    return lstArrDcf
         
