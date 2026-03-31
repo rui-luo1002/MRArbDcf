@@ -1,7 +1,7 @@
 # Magnetic Resonance Arbitrary Density Compensation Function (MRArbDcf, MAD)
 
 ## Introduction
-This is the code repository for paper "Sampling Density Compensation using Fast Fourier Deconvolution" [1]. To fill the gap that the previous iterative DCF methods are slow (especially in 3D), this package provides a non-iterative method based on fast Fourier deconvolution. This package supports both CPU and GPU and can derive DCF for a trajectory designed for a 256³ matrix size in 30 seconds on a multi-core CPU or 10 seconds on a GPU.
+This is the code repository for paper "Sampling Density Compensation using Fast Fourier Deconvolution" [1]. To fill the gap that the previous iterative DCF methods are slow (especially in 3D), this package provides a non-iterative method based on fast Fourier deconvolution. This package supports both CPU and GPU and can derive DCF for a trajectory designed for a 256³ matrix size in 20 seconds on a multi-core CPU or 10 seconds on a GPU.
 
 ## Installation
 You can install this package either via pip:

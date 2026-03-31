@@ -82,7 +82,7 @@ def setMode(x:int):
     Set solver's working mode.
     
     Args:
-        x: 0 for general mode, 1 for fast mode, 2 for precise mode
+        x: 0 for general mode, 1 for fast mode
     """
     if x==0:
         setInputCheck(1)
@@ -98,10 +98,6 @@ def setMode(x:int):
         setInputCheck(0)
         setWarmStart(3)
         setWind(["poly"], [2.4])
-    elif x==2:
-        setInputCheck(0)
-        setWarmStart(3)
-        setWind(["poly", "poly"], [2, 4])
     else:
         raise RuntimeError("x")
     
