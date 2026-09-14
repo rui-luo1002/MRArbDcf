@@ -1,11 +1,11 @@
 [project]
 name = "MRArbDcf"
-version = "2.0.2"
+version = "3.0.0"
 dependencies = ["numpy", "finufft", "psutil"]
 
 description = "Density Compensation Function Design Tool for Arbirary k-Space Trajectoryies."
 keywords = ["MRI", "non-Cartesian", "Reconstruction", "DCF", "Density-Compensation"]
-authors = [{name = "Ryan", email = "ryan_shanghaitech@proton.me"}]
+authors = [{name = "Rui", email = "Rui.1002@proton.me"}]
 
 license = "MIT"
 license-files = ["LICENSE"]

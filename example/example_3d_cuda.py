@@ -39,7 +39,6 @@ for arrK0, arrGrad in zip(lstArrK0, lstArrGrad):
     lstArrK.append(arrK[:,:nAx])
 
 # solve for the DCF
-mad.setUseCuda(1)
 lstArrK = [cupy.asarray(arrK) for arrK in lstArrK]
 
 t = time()
@@ -48,6 +47,7 @@ t = time()-t
 print(f"time: {t:.3f}")
 
 lstArrK = [arrK.get() for arrK in lstArrK]
+lstArrDcf = [arrDcf.get() for arrDcf in lstArrDcf]
 
 # 4. Visualization
 fig = figure(figsize=(12, 5))
@@ -65,4 +65,7 @@ ax.set_xlabel("Index")
 ax.set_ylabel("DCF")
 ax.grid("both")
 
-show()
+filename = __file__.replace(".py","_fig.png")
+fig.savefig(filename, dpi=300)
+print(f"figure saved to {filename}")
+# show()

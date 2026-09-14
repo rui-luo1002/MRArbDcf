@@ -58,4 +58,7 @@ ax.set_xlabel("Index")
 ax.set_ylabel("DCF")
 ax.grid("both")
 
-show()
+filename = __file__.replace(".py","_fig.png")
+fig.savefig(filename, dpi=300)
+print(f"figure saved to {filename}")
+# show()

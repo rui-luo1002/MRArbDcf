@@ -1,2 +1,2 @@
-matplotlib
-mrarbgrad>=2,<3
+matplotlib==3.10.9
+mrarbgrad==4.4.1

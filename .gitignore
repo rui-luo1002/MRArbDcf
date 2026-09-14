@@ -1,5 +1,10 @@
 *.npy
 *.npz
+
+*.png
+*.gif
+*.svg
+
 test*
 dev
 

@@ -1,19 +1,17 @@
 # import library
 import numpy
-from numpy.typing import NDArray
-from matplotlib.pyplot import * # test
+from numpy.typing import *
+from typing import *
 import finufft
-from .Utility import normDcf
+from .utility import normDcf
 from time import time
 from itertools import product
 from psutil import cpu_count
+from importlib import import_module
 
 # gpu library
-try:
-    import cufinufft, cupy
-except ImportError:
-    pass
-xp = numpy
+try: import cufinufft, cupy
+except ImportError: cufinufft, cupy = None, None
 
 pi = numpy.pi
 
@@ -66,25 +64,14 @@ def setWind(wtype:list[str], wpara:list[float]):
     lstWType = wtype
     lstWPara = wpara
     
-def setUseCuda(x:bool):
-    """
-    Set whether to use cuda for acceleration.
-    By default cuda would be used if cufinufft and cupy are both installed, this function is to let you turn off it.
-
-    Args:
-        x: True for to use. False for not to.
-    """
-    global xp
-    xp = cupy if x else numpy
-    
-def setMode(x:int):
+def setMode(x:Literal["general", "fast"]):
     """
     Set solver's working mode.
     
     Args:
         x: 0 for general mode, 1 for fast mode
     """
-    if x==0:
+    if x=="general":
         setInputCheck(1)
         setWarmStart(0)
         setWind(["corr", "poly"], [0, 2.4])
@@ -94,13 +81,16 @@ def setMode(x:int):
         initial guess, because this kind of window
         will not cause DCF cancelation.
         """
-    elif x==1:
+    elif x=="fast":
         setInputCheck(0)
         setWarmStart(3)
         setWind(["poly"], [2.4])
     else:
-        raise RuntimeError("x")
+        raise ValueError("x")
     
+def backend(sample:Any):
+    return import_module(type(sample).__module__)
+
 # main solver
 def solve(nPix:int, lstArrK:list[NDArray]) -> list[NDArray]:
     """
@@ -116,6 +106,7 @@ def solve(nPix:int, lstArrK:list[NDArray]) -> list[NDArray]:
     """
     t0 = time()
     
+    xp = backend(lstArrK[0])
     arrCatK = xp.concatenate(lstArrK, axis=0).astype(xp.float32)
     nTraj = len(lstArrK)
     arrNRO = xp.array([arrK.shape[0] for arrK in lstArrK])
@@ -189,8 +180,13 @@ def solve(nPix:int, lstArrK:list[NDArray]) -> list[NDArray]:
         if fDbgInfo: print(f"# Nd window: {time() - t0:.3f}s"); t0 = time()
         
         # deconvolve
-        nufftpara = {"upsampfac":1.25} if xp!=numpy else {"debug":0, "spread_debug":0, "showwarn":0, "upsampfac":1.25, "nthreads":cpu_count(logical=True), "spread_sort":1, "fftw":64}
-        fn = cufinufft if xp!=numpy else finufft
+        if xp==numpy:
+            nufftpara = {"debug":0, "spread_debug":0, "showwarn":0, "upsampfac":1.25, "nthreads":cpu_count(logical=True), "spread_sort":1, "fftw":64}
+            fn = finufft
+        elif xp==cupy:
+            nufftpara = {"upsampfac":1.25}
+            fn = cufinufft
+        else: raise ValueError("xp")
         
         n_modes = tuple(2*nPix-1 for _ in range(nAx))
         arr2PiKT = xp.array(arrCatK.T, order='C', dtype=float)
@@ -217,11 +213,8 @@ def solve(nPix:int, lstArrK:list[NDArray]) -> list[NDArray]:
         arrCatDcf = normDcf(arrCatDcf, nAx)
         if fDbgInfo: print(f"# nufft: {time() - t0:.3f}s"); t0 = time()
     
-    if xp!=numpy:
-        arrCatDcf = arrCatDcf.get()
-        arrI0 = arrI0.get()
-    lstArrDcf = [arrCatDcf[arrI0[iTraj]:arrI0[iTraj+1]] for iTraj in range(nTraj-1)]
-    lstArrDcf.append(arrCatDcf[arrI0[-1]:])
+    lstArrDcf = [arrCatDcf[arrI0[iTraj].item():arrI0[iTraj+1].item()] for iTraj in range(nTraj-1)]
+    lstArrDcf.append(arrCatDcf[arrI0[-1].item():])
     
     return lstArrDcf
-        
+    

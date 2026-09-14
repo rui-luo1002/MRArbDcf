@@ -1,5 +1,5 @@
-from .Function import setDbgInfo, setInputCheck, setWarmStart, setWind, setUseCuda, setMode, solve
+from .main import setDbgInfo, setInputCheck, setWarmStart, setWind, setMode, solve
 
-from .Utility import cropDcf, normDcf, normImg
+from .utility import cropDcf, normDcf, normImg
 
-setMode(0)
+setMode("general")
