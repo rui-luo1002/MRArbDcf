@@ -13,7 +13,7 @@ dtAdc = 2.5e-6
 
 mag.config(dt = dtGrad, enTrajRep=False)
 
-traj = "Yarnball" # "Cones" "Yarnball" 
+traj = "Cones" 
 lstK0GradK1 = mag.scan(traj, nPix, nAcq=None)
 lstArrGrad, lstArrK = [], []
 for k0, arrGrad, k1 in lstK0GradK1:
