@@ -1,2 +1,2 @@
 matplotlib==3.10.9
-mrarbgrad==4.4.1
+mrarbgrad==5.1.1

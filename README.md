@@ -1,31 +1,44 @@
-# Magnetic Resonance Arbitrary Density Compensation Function (MRArbDcf, MAD)
+# Non-Cartesian MRI Density Compensation Toolbox (MRArbDcf)
+Python library for solving for the density compensation function (DCF) for arbitrary MRI trajectories.
 
-## Introduction
-This is the code repository for paper "Sampling Density Compensation using Fast Fourier Deconvolution" [1]. To fill the gap that the previous iterative DCF methods are slow (especially in 3D), this package provides a non-iterative method based on fast Fourier deconvolution. This package supports both CPU and GPU and can derive DCF for a trajectory designed for a 256³ matrix size in 20 seconds on a multi-core CPU or 10 seconds on a GPU.
-
-## Installation
-You can install this package either via pip:
+## How to Use
+### Install
 ```bash
-$ pip install mrarbdcf
-```
-or offline
-```bash
-$ bash install.bash
+$ pip install mrarbdcf mrarbgrad
 ```
 
-Optionally, to enable CUDA acceleration in this package, you need to install `cufinufft` and `cupy`. It's recommended to read their official installation guides before installing - pip is not the best source for installation because some dependencies are only available from conda.
+### Import Libraries
+```python
+from numpy import *
+import mrarbdcf as mad
+import mrarbgrad as mag
+```
 
-## Usage
-For tutorials, you can find examples in the `example` folder. Most functions are well-commented in the Google style. We plan to release the documents on `readthedocs.org` in the future.
+### Generate a Trajecotry
+```python
+lstK0GradK1 = mag.scan("Cones", nPix, nAcq=None)
+lstArrK = []
+for k0, arrGrad, k1 in lstK0GradK1:
+    arrK = k0 + mag.integrate(arrGrad, dtGrad, dtAdc)
+    lstArrK.append(arrK)
+```
 
-## Acknowledgement
-FINUFFT [2,3] and CUFINUFFT [4] are used as NUFFT operators in this package. We thank the authors for their contributions to create such fast NUFFT libraries.
+### Solve for the Density Compensation Function
+```pyhton
+lstArrDcf = mad.solve(nPix, lstArrK)
+```
 
-## Reference
-[1] Luo R, Hu P, Qi H. Sampling Density Compensation using Fast Fourier Deconvolution [Internet]. arXiv; 2025 [cited 2025 Oct 17]. Available from: http://arxiv.org/abs/2510.14873
+## Acknowledgements
+The algorithm in this library is proposed in:
 
-[2] Barnett AH, Magland J, af Klinteberg L. A Parallel Nonuniform Fast Fourier Transform Library Based on an “Exponential of Semicircle" Kernel. SIAM J Sci Comput. 2019 Jan;41(5):C479–504. 
+> [1] Luo R, Hu P, Qi H. Sampling Density Compensation using Fast Fourier Deconvolution. In: Proc. Int. Soc. Magn. Reson. Med. [Internet]. 2026 [cited 2026 Apr 28]. Available from: http://echo.ismrm.org/p/ISMRM2026/461-03-015
+>
+> [2] Luo R, Hu P, Qi H. Sampling Density Compensation using Fast Fourier Deconvolution [Internet]. arXiv; 2025 [cited 2025 Oct 17]. Available from: http://arxiv.org/abs/2510.14873
 
-[3] Barnett AH. Aliasing error of the exp(β√(1-z²)) kernel in the nonuniform fast Fourier transform. Applied and Computational Harmonic Analysis. 2021 Mar 1;51:1–16. 
+Additionally, FINUFFT [3,4] and CUFINUFFT [5] are adopted for NUFFT operators in this package.
 
-[4] Shih Y hsuan, Wright G, Anden J, Blaschke J, Barnett AH. cuFINUFFT: a load-balanced GPU library for general-purpose nonuniform FFTs. 2021 IEEE International Parallel and Distributed Processing Symposium Workshops (IPDPSW). 2021 June;688–97. 
+> [3] Barnett AH, Magland J, af Klinteberg L. A Parallel Nonuniform Fast Fourier Transform Library Based on an “Exponential of Semicircle" Kernel. SIAM J Sci Comput. 2019 Jan;41(5):C479–504. 
+>
+> [4] Barnett AH. Aliasing error of the exp(β√(1-z²)) kernel in the nonuniform fast Fourier transform. Applied and Computational Harmonic Analysis. 2021 Mar 1;51:1–16. 
+>
+> [5] Shih Y hsuan, Wright G, Anden J, Blaschke J, Barnett AH. cuFINUFFT: a load-balanced GPU library for general-purpose nonuniform FFTs. 2021 IEEE International Parallel and Distributed Processing Symposium Workshops (IPDPSW). 2021 June;688–97. 

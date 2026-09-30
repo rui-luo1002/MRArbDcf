@@ -5,53 +5,36 @@ import mrarbgrad as mag
 import mrarbdcf as mad
 from time import time
 
-sTraj = ["VdSpiral", "Rosette", "Yarnball", "Cones"][2]
-gamma = 42.5756e6
-
 nPix = 256
-fov = 0.5
-sLim = 50 * gamma * fov / nPix
-gLim = 120e-3 * gamma * fov / nPix
+
+# generate a sampling pattern
 dtGrad = 10e-6
-dtADC = 2.5e-6
+dtAdc = 2.5e-6
 
-mag.setMagOverSamp(4)
-if sTraj=="Yarnball":
-    nAx = 3; mag.setGoldAng(nAx==2); gLim = amin([gLim, 1/(dtADC*nPix)])
-    lstArrK0, lstArrGrad = mag.getG_Yarnball(fov, nPix, sLim, gLim, dtGrad, kRhoPhi=0.5/(2*pi))
-elif sTraj=="VdSpiral":
-    nAx = 2; mag.setGoldAng(nAx==2); gLim = amin([gLim, 1/(dtADC*nPix)])
-    lstArrK0, lstArrGrad = mag.getG_VDSpiral(fov, nPix, sLim, gLim, dtGrad, kRhoPhi0=0.5/(256*pi), kRhoPhi1=0.5/(2*pi))
-elif sTraj=="Rosette":
-    nAx = 2; mag.setGoldAng(nAx==2); gLim = amin([gLim, 1/(dtADC*nPix)])
-    lstArrK0, lstArrGrad = mag.getG_Rosette(fov, nPix, sLim, gLim, dtGrad)
-elif sTraj=="Cones":
-    nAx = 3; mag.setGoldAng(nAx==2); gLim = amin([gLim, 1/(dtADC*nPix)])
-    lstArrK0, lstArrGrad = mag.getG_Cones(fov, nPix, sLim, gLim, dtGrad)
+mag.config(dt = dtGrad, enTrajRep=False)
 
-# Convert gradients to k-space coordinates
-lstArrK:list[NDArray] = []
-for arrK0, arrGrad in zip(lstArrK0, lstArrGrad):
-    arrK = mag.cvtGrad2Traj(arrGrad, dtGrad, dtADC)[0]
-    arrK += arrK0
-    # Keep all 3 dimensions for the 3D case
-    lstArrK.append(arrK[:,:nAx])
+traj = "Yarnball" # "Cones" "Yarnball" 
+lstK0GradK1 = mag.scan(traj, nPix, nAcq=None)
+lstArrGrad, lstArrK = [], []
+for k0, arrGrad, k1 in lstK0GradK1:
+    arrK = mag.integrate(arrGrad, dtGrad, dtAdc)
+    arrK += k0
+    lstArrGrad.append(arrGrad)
+    lstArrK.append(arrK)
 
+# solve for the DCF
 t = time()
 lstArrDcf = mad.solve(nPix, lstArrK)
 t = time()-t
 print(f"time: {t:.3f}")
 
-# 4. Visualization
+# visualization
 fig = figure(figsize=(12, 5))
 idx = len(lstArrK)//4
 
-# 3D Trajectory Plot (Subsampling for performance)
-ax = fig.add_subplot(121, projection='3d' if nAx==3 else None)
+ax = fig.add_subplot(121, projection='3d')
 ax.plot(*lstArrK[idx].T, '.-')
-ax.set_title(sTraj)
 
-# DCF Profile Plot
 ax = fig.add_subplot(122)
 ax.plot(abs(lstArrDcf[idx]), ".-")
 ax.set_xlabel("Index")

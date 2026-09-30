@@ -1,12 +1,12 @@
 *.npy
 *.npz
+*.so
 
 *.png
-*.gif
 *.svg
-
-test*
-dev
+*.gif
+*.avi
+*.mp4
 
 *.egg-info/
 build

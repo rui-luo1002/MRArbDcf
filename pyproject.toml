@@ -5,7 +5,7 @@ dependencies = ["numpy", "finufft", "psutil"]
 
 description = "Density Compensation Function Design Tool for Arbirary k-Space Trajectoryies."
 keywords = ["MRI", "non-Cartesian", "Reconstruction", "DCF", "Density-Compensation"]
-authors = [{name = "Rui", email = "Rui.1002@proton.me"}]
+authors = [{name = "Rui Luo", email = "Rui.1002@proton.me"}]
 
 license = "MIT"
 license-files = ["LICENSE"]

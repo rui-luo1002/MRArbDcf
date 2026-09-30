@@ -99,7 +99,6 @@ def solve(nPix:int, lstArrK:list[NDArray]) -> list[NDArray]:
     Args:
         nPix: Designed number of pixels of the trajectory.
         lstArrK: list of trajectories, element shape [nK,nAx].
-        arrI0: Start index of each interleaves, shape [nIntLea,].
         
     Returns:
         list of density compensation function, element shape [nK,].

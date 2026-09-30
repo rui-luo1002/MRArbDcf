@@ -1,0 +1,4 @@
+The results are not perfectly reproducable because:
+1. finufft has different performance among versions, sometimes they change the grid oversamping ratio, which may dramatically affect the speed of this algorithm. Although I have fixed the oversampling ratio, I am not sure if they will change something other in the future.
+2. different normalization method and value range calculation can make reconstruction metrics vary much, different phantom used can also make them vary much.
+3. computation time itself is not reproducable per se.
