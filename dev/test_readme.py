@@ -9,3 +9,10 @@ for k0, arrGrad, k1 in lstK0GradK1:
     lstArrK.append(arrK)
 
 lstArrDcf = mad.solve(256, lstArrK)
+
+# END of README example
+from matplotlib.pyplot import *
+
+figure()
+plot(lstArrDcf[300].real, ".-")
+savefig(__file__.replace(".py", "_fig.png"), dpi=300)

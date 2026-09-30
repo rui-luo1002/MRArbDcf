@@ -4,7 +4,7 @@ Python library for solving for the density compensation function (DCF) for arbit
 ## How to Use
 ### Install
 ```bash
-$ pip install mrarbdcf mrarbgrad
+$ pip install mrarbdcf mrarbgrad==5.1.1
 ```
 
 ### Import Libraries
