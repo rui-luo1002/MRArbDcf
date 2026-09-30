@@ -1,3 +1,6 @@
+3.0.2 (Sep 30, 2026)
+polish project description.
+
 3.0.0 (Sep 30, 2026)
 remove `setUseCuda()`; currently cuda libraries will be automatically enabled when input is a cupy array
 
