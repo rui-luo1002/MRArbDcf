@@ -1,9 +1,10 @@
 [project]
 name = "MRArbDcf"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = ["numpy", "finufft", "psutil"]
+requires-python = ">=3.10"
 
-description = "Density Compensation Function Design Tool for Arbirary k-Space Trajectoryies."
+description = "Non-Cartesian MRI Density Compensation Toolbox (MRArbDcf)"
 keywords = ["MRI", "non-Cartesian", "Reconstruction", "DCF", "Density-Compensation"]
 authors = [{name = "Rui Luo", email = "Rui.1002@proton.me"}]
 
