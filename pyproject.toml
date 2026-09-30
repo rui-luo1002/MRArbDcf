@@ -13,5 +13,5 @@ license-files = ["LICENSE"]
 readme = "README.md"
 
 [project.urls]
-Repository = "https://github.com/RyanShanghaitech/MRArbDcf"
-Examples = "https://github.com/RyanShanghaitech/MRArbDcf/tree/main/example"
+Repository = "https://github.com/rui-luo1002/MRArbDcf"
+Examples = "https://github.com/rui-luo1002/MRArbDcf/tree/main/example"
